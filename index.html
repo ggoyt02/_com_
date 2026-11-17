@@ -1,0 +1,37 @@
+// วางโค้ดนี้ใน Google Sheets > ส่วนขยาย > Apps Script แล้ว Deploy เป็น Web app
+// (Execute as: Me / Who has access: Anyone) จากนั้นคัดลอก URL ไปใส่ SCRIPT_URL ใน index.html
+const SHEET = "บันทึก";
+const HEAD = ["id","date","type","category","detail","staff","method","amount","note"];
+
+function sh_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let s = ss.getSheetByName(SHEET);
+  if (!s) { s = ss.insertSheet(SHEET); s.appendRow(HEAD); s.setFrozenRows(1); }
+  return s;
+}
+function out_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
+function doGet() {
+  const v = sh_().getDataRange().getValues(); v.shift();
+  const rows = v.filter(r => r[0]).map(r => {
+    const o = {}; HEAD.forEach((h, i) => o[h] = r[i]);
+    if (o.date instanceof Date) o.date = Utilities.formatDate(o.date, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    return o;
+  });
+  return out_({ ok: true, rows });
+}
+function doPost(e) {
+  const p = JSON.parse(e.postData.contents), s = sh_();
+  if (p.action === "add") {
+    s.appendRow(HEAD.map(h => p.row[h] ?? ""));
+    return out_({ ok: true });
+  }
+  if (p.action === "delete") {
+    const ids = s.getRange(1, 1, s.getLastRow(), 1).getValues().flat();
+    const i = ids.indexOf(p.id);
+    if (i > 0) s.deleteRow(i + 1);
+    return out_({ ok: true });
+  }
+  return out_({ ok: false });
+}
