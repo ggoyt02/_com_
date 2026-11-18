@@ -54,6 +54,7 @@ td.d{white-space:normal;min-width:150px}
 .empty{text-align:center;color:var(--mut);padding:28px 8px}
 #msg{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:99px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
 #msg.show{opacity:1}#msg.err{background:var(--exp)}
+.lnk{color:#fff;font-size:.85rem;border:1px solid #5a6a90;border-radius:99px;padding:3px 12px;text-decoration:none;display:inline-block;margin-bottom:2px}.lnk:hover{background:#2b3858}
 .note{font-size:.8rem;color:var(--mut);margin-top:10px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -62,7 +63,7 @@ td.d{white-space:normal;min-width:150px}
 <div class="pole"></div>
 <header><div class="wrap">
   <div><h1>✂ บันทึกรับ-จ่าย ร้านตัดผมชาย/หญิง</h1><small id="mode"></small></div>
-  <small id="today"></small>
+  <div><a class="lnk" id="sheetLink" target="_blank" rel="noopener">เปิด Google Sheet</a><br><small id="today"></small></div>
 </div></header>
 
 <main class="wrap">
@@ -82,16 +83,16 @@ td.d{white-space:normal;min-width:150px}
         </div>
         <div class="row2">
           <div><label for="date">วันที่</label><input type="date" id="date" required></div>
-          <div><label for="amount">จำนวนเงิน (บาท)</label><input type="number" id="amount" min="0" step="any" inputmode="decimal" required></div>
+          <div><label for="time">เวลา</label><input type="time" id="time" required></div>
         </div>
         <label for="cat">หมวดหมู่</label><select id="cat" required></select>
         <label for="detail">รายละเอียด</label><input id="detail" placeholder="เช่น ตัดผมชาย + สระ">
+        <label for="amount">จำนวนเงิน (บาท)</label><input type="number" id="amount" min="0" step="any" inputmode="decimal" required>
         <div class="row2">
-          <div><label for="staff">ช่าง/ผู้รับผิดชอบ</label><input id="staff" placeholder="ชื่อช่าง"></div>
-          <div><label for="method">ช่องทางชำระ</label>
+          <div><label for="staff">ชื่อช่างผู้ให้บริการ</label><input id="staff" placeholder="ชื่อช่าง"></div>
+          <div><label for="method">ช่องทางการชำระ</label>
             <select id="method"><option>เงินสด</option><option>โอน/พร้อมเพย์</option><option>บัตรเครดิต</option></select></div>
         </div>
-        <label for="note">หมายเหตุ</label><textarea id="note" rows="2"></textarea>
         <button class="save" id="btn" type="submit">บันทึกรายการ</button>
       </form>
     </section>
@@ -105,7 +106,7 @@ td.d{white-space:normal;min-width:150px}
       </div>
       <div class="tbl">
         <table>
-          <thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>รายละเอียด</th><th>ช่าง</th><th>ชำระ</th><th class="n">จำนวนเงิน</th><th></th></tr></thead>
+          <thead><tr><th>วัน-เวลา</th><th>ประเภท</th><th>หมวดหมู่</th><th>รายละเอียด</th><th>ช่าง</th><th>ชำระ</th><th class="n">จำนวนเงิน</th><th></th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -115,8 +116,9 @@ td.d{white-space:normal;min-width:150px}
 <div id="msg" role="status"></div>
 
 <script>
-// ===== วางลิงก์ Web App ของ Google Apps Script ตรงนี้ =====
+// ===== ลิงก์ที่ใช้ในระบบ =====
 const SCRIPT_URL="https://script.google.com/macros/s/AKfycbw1bOBk1QoWJiBfqeSKjLxWn2VPVS2f355c7VMPiY48TUzbwj6VHKg8CyqZr3pMDEUCGQ/exec";
+const SHEET_URL="https://docs.google.com/spreadsheets/d/1l_Mi0tpH3mYdV58oWME4SvaBVCBzzK6mCLCAPytME_U/edit?usp=sharing";
 // ==========================================================
 
 const CATS={
@@ -167,8 +169,8 @@ function render(){
   $("rows").innerHTML=list.length?list.map(r=>{
     const k=r.type==="รายรับ"?"i":"e",sign=k==="i"?"+":"-";
     const d=String(r.date).slice(0,10).split("-").reverse().join("/");
-    return`<tr><td>${esc(d)}</td><td><span class="tag ${k}">${esc(r.type)}</span></td><td>${esc(r.category)}</td>
-    <td class="d">${esc(r.detail)}${r.note?`<br><small style="color:var(--mut)">${esc(r.note)}</small>`:""}</td>
+    return`<tr><td>${esc(d)} ${esc(r.time||"")}</td><td><span class="tag ${k}">${esc(r.type)}</span></td><td>${esc(r.category)}</td>
+    <td class="d">${esc(r.detail)}</td>
     <td>${esc(r.staff)}</td><td>${esc(r.method)}</td>
     <td class="n" style="color:var(--${k==="i"?"inc":"exp"});font-weight:700">${sign}${baht(r.amount)}</td>
     <td><button class="del" data-id="${esc(r.id)}" aria-label="ลบรายการ">ลบ</button></td></tr>`}).join("")
@@ -178,29 +180,30 @@ function render(){
 $("f").addEventListener("submit",async e=>{
   e.preventDefault();
   const row={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
-    date:$("date").value,type:getType(),category:$("cat").value,detail:$("detail").value.trim(),
-    staff:$("staff").value.trim(),method:$("method").value,amount:Number($("amount").value),note:$("note").value.trim()};
+    date:$("date").value,time:$("time").value,type:getType(),category:$("cat").value,detail:$("detail").value.trim(),
+    staff:$("staff").value.trim(),method:$("method").value,amount:Number($("amount").value)};
   $("btn").disabled=true;
   try{
     const res=await api({action:"add",row});
     if(res.ok===false)throw 0;
-    rows.push(row);$("month").value=row.date.slice(0,7);render();
-    ["detail","amount","note"].forEach(i=>$(i).value="");toast("บันทึกรายการแล้ว");
+    $("month").value=row.date.slice(0,7);await load();
+    ["detail","amount"].forEach(i=>$(i).value="");toast("บันทึกรายการแล้ว");
   }catch(err){toast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง",true)}
   $("btn").disabled=false;
 });
 $("rows").addEventListener("click",async e=>{
   const id=e.target.dataset.id;if(!id||!confirm("ลบรายการนี้ใช่หรือไม่?"))return;
-  try{const res=await api({action:"delete",id});if(res.ok===false)throw 0;rows=rows.filter(r=>r.id!==id);render();toast("ลบรายการแล้ว")}
+  try{const res=await api({action:"delete",id});if(res.ok===false)throw 0;await load();toast("ลบรายการแล้ว")}
   catch(err){toast("ลบไม่สำเร็จ",true)}
 });
 document.querySelectorAll("input[name=type]").forEach(r=>r.addEventListener("change",fillCats));
 $("month").addEventListener("change",render);$("ftype").addEventListener("change",render);$("reload").addEventListener("click",load);
 
 const now=new Date();
-$("date").value=iso(now);$("month").value=iso(now).slice(0,7);
+$("date").value=iso(now);$("time").value=now.toTimeString().slice(0,5);$("month").value=iso(now).slice(0,7);
 $("today").textContent=now.toLocaleDateString("th-TH",{dateStyle:"long"});
 $("mode").textContent=ready?"เชื่อมต่อ Google Sheets แล้ว":"โหมดทดลอง: ยังไม่ได้ใส่ SCRIPT_URL (ข้อมูลเก็บในเบราว์เซอร์นี้)";
+$("sheetLink").href=SHEET_URL;
 fillCats();load();
 </script>
 </body>
