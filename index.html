@@ -117,7 +117,7 @@ td.d{white-space:normal;min-width:150px}
 
 <script>
 // ===== ลิงก์ที่ใช้ในระบบ =====
-const SCRIPT_URL="https://script.google.com/macros/s/AKfycbw1bOBk1QoWJiBfqeSKjLxWn2VPVS2f355c7VMPiY48TUzbwj6VHKg8CyqZr3pMDEUCGQ/exec";
+const SCRIPT_URL="https://script.google.com/macros/s/AKfycbxf4Zh_-7BDOy3DcpYoayEkVQeOvDzluBH95TFx8dlxHLeeZYhLDqW45OAivce9zHKsKQ/exec";
 const SHEET_URL="https://docs.google.com/spreadsheets/d/1l_Mi0tpH3mYdV58oWME4SvaBVCBzzK6mCLCAPytME_U/edit?usp=sharing";
 // ==========================================================
 
@@ -138,6 +138,16 @@ function toast(t,err){const m=$("msg");m.textContent=t;m.className="show"+(err?"
 
 function fillCats(){$("cat").innerHTML=CATS[getType()].map(c=>`<option>${c}</option>`).join("")}
 
+// แปลงข้อมูลเป็นฟอร์ม โดยส่งทั้งชื่อฟิลด์ภาษาอังกฤษและหัวคอลัมน์ภาษาไทย (สคริปต์เวอร์ชันไหนก็อ่านได้)
+function qs(p){
+  const o={action:p.action};
+  if(p.row){const x=p.row;Object.assign(o,{
+    date:x.date,time:x.time,type:x.type,category:x.category,detail:x.detail,amount:x.amount,method:x.method,staff:x.staff,
+    "วัน":x.date,"วันที่":x.date,"เวลา":x.time,"ประเภทรายการ":x.type,"หมวดหมู่":x.category,"รายละเอียด":x.detail,
+    "จำนวนเงิน":x.amount,"ช่องทางการชำระ":x.method,"ชื่อช่างผู้ให้บริการ":x.staff})}
+  if(p.id!=null)o.id=p.id;
+  return new URLSearchParams(o).toString();
+}
 async function api(payload){
   if(!ready){ // โหมดทดลอง: เก็บในเบราว์เซอร์
     let l=JSON.parse(localStorage.getItem(LS)||"[]");
@@ -145,8 +155,9 @@ async function api(payload){
     if(payload.action==="delete")l=l.filter(r=>r.id!==payload.id);
     localStorage.setItem(LS,JSON.stringify(l));return{ok:true};
   }
-  const r=await fetch(SCRIPT_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
-  return r.json();
+  const r=await fetch(SCRIPT_URL,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8"},body:qs(payload)});
+  const t=await r.text();
+  try{return JSON.parse(t)}catch(e){return{ok:true}}
 }
 async function load(){
   try{
